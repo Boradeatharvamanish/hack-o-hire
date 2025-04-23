@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Payment</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+<div class="container">
+    <h2>Payment Page</h2>
+    <ul>
+        {% for item in cart %}
+        <li>{{ item.name }} - ₹{{ item.price }}</li>
+        {% endfor %}
+    </ul>
+    <p><strong>Total: ₹{{ total }}</strong></p>
+    <form action="/make_payment" method="POST">
+        <button type="submit">Make Payment</button>
+    </form>
+</div>
+</body>
+</html>
