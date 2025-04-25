@@ -15,24 +15,32 @@ def generate_log(api_name, req_info=None, previous_api=None):
     session_id = req_info.get("session_id") or str(uuid.uuid4())
     user_id = req_info.get("user_id") or str(uuid.uuid4())
 
-    # Simulated request and response metadata
+    # Hardcode server_id based on API type
+    if api_name in ["auth", "make_payment", "catalog"]:
+        server_id = "server_1"
+    else:
+        server_id = "server_2"
+    
+    # If server_id was passed in req_info, use that instead (for consistency in the session)
+    if req_info.get("server_id"):
+        server_id = req_info.get("server_id")
+        
+    instance_id = req_info.get("instance_id") or f"instance_{random.randint(1, 10)}"
+
     request_id = f"req-{uuid.uuid4().hex[:16]}"
     method = random.choice(["GET", "POST"])
     path = f"/{api_name}"
     user_agent = fake.user_agent()
     source_ip = fake.ipv4()
-
     response_time_ms = round(random.uniform(100, 500), 2)
 
-    # Simulate API being in a degraded state
     if is_api_failing(api_name):
         is_anomalous = True
         status_code = random.choice([500, 503, 504])
         success = False
         error_info = f"API returned error code {status_code}. Ongoing issue due to prior failure."
     else:
-        # Random chance to simulate a new failure
-        if random.random() < 0.1:  # 10% chance
+        if random.random() < 0.1:
             is_anomalous = True
             status_code = random.choice([500, 503, 504])
             success = False
@@ -43,15 +51,26 @@ def generate_log(api_name, req_info=None, previous_api=None):
             status_code = 200
             success = True
             error_info = None
-
-    # Log structure
+    
+    # Determine environment based on API type (for testing purposes)
+    if api_name in ["auth", "make_payment"]:
+        environment = "on-prem"
+    else:
+        environment = random.choice(["cloud", "multi-cloud"])
+            
     log = {
         "timestamp": datetime.utcnow().isoformat(),
+        "meta": {
+            "environment": environment,
+            "region": random.choice(["us-east", "us-west", "eu-west", "asia-south"]),
+            "retry_count": random.randint(0, 3)
+        },
         f"{api_name}_service": {
             "type": random.choice(["rest", "graphql"]),
-            "environment": random.choice(["on-prem", "cloud", "multi-cloud"]),
+            "environment": environment,
             "region": random.choice(["us-east", "us-west", "eu-west", "asia-south"]),
-            "instance_id": f"{api_name}-instance-{random.randint(1, 10)}"
+            "instance_id": instance_id,
+            "server_id": server_id
         },
         "request": {
             "id": request_id,
@@ -95,7 +114,14 @@ def generate_log(api_name, req_info=None, previous_api=None):
             "correlation_id": correlation_id,
             "request_id": request_id,
             "previous_api": previous_api,
-            "session_id": session_id
+            "session_id": session_id,
+            "server_id": server_id,  # Add server_id to tracing for anomaly detection
+            "previous_server_id": get_previous_server_id(previous_api),
+            "session_failures": random.randint(0, 2)
+        },
+        "server_context": {
+            "server_id": server_id,
+            "instance_id": instance_id
         },
         "is_anomalous": is_anomalous,
         "error_info": error_info
@@ -103,6 +129,15 @@ def generate_log(api_name, req_info=None, previous_api=None):
 
     return log, correlation_id, session_id, user_id
 
+def get_previous_server_id(previous_api):
+    """Helper function to determine previous server ID"""
+    if not previous_api:
+        return None
+    
+    if previous_api in ["auth", "make_payment", "catalog"]:
+        return "server_1"
+    else:
+        return "server_2"
 
 def save_log(log, api_name):
     import os, json
